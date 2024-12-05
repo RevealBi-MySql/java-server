@@ -17,23 +17,49 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
-// ****
-// This is a sample of how to read the .rdash files and extract the JSON content
-// There are 2 useful functions /visualizations and /names, they are helpers
-// that interact with the rdash files and return the data in a format that Reveal can use
-// ****
-
-// ****
-// NOTE:  This is Optional, these are helpers that can be used to read the .rdash files
-// ****
-
 @Path("/dashboards")
 public class DomController {
 
     @GET
+    @Path("/names")
+    @Produces(MediaType.APPLICATION_JSON)
+    public List<DashboardNameInfo> getDashboardNames() {
+        String dashboardsFolderPath = "dashboards"; 
+        List<DashboardNameInfo> dashboardNamesList = new ArrayList<>();
+
+        try {
+            File folder = new File(dashboardsFolderPath);
+            File[] rdashFiles = folder.listFiles((dir, name) -> name.endsWith(".rdash")); 
+            if (rdashFiles == null || rdashFiles.length == 0) {
+                System.out.println("No .rdash files found in the folder");
+                return dashboardNamesList;
+            }
+
+            for (File rdashFile : rdashFiles) {
+                String fileNameWithoutExtension = rdashFile.getName().replaceFirst("[.][^.]+$", ""); 
+                String jsonContent = extractJsonFromRdash(rdashFile.getPath());
+                if (jsonContent.isEmpty()) {
+                    System.out.println("No JSON content found in the rdash file: " + rdashFile.getName());
+                    continue;
+                }
+
+                String title = extractTitleFromJson(jsonContent);
+                dashboardNamesList.add(new DashboardNameInfo(fileNameWithoutExtension, title));
+            }
+
+        } catch (IOException e) {
+            System.err.println("Error while reading the rdash files: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return dashboardNamesList;
+    }
+
+    @GET
     @Path("/visualizations")
     @Produces(MediaType.APPLICATION_JSON)
-    public List<VisualizationChartInfo> getRdashData() {        
+    public List<VisualizationChartInfo> getRdashData() {
+        System.out.println("In the controller function");
         String dashboardsFolderPath = "dashboards"; 
         List<VisualizationChartInfo> visualizationChartInfoList = new ArrayList<>();
 
@@ -64,41 +90,6 @@ public class DomController {
         }
 
         return visualizationChartInfoList;
-    }
-
-    @GET
-    @Path("/names")
-    @Produces(MediaType.APPLICATION_JSON)
-    public List<DashboardInfo> getDashboardNames() {
-        String dashboardsFolderPath = "dashboards";
-        List<DashboardInfo> dashboardNamesList = new ArrayList<>();
-
-        try {
-            File folder = new File(dashboardsFolderPath);
-            File[] rdashFiles = folder.listFiles((dir, name) -> name.endsWith(".rdash"));
-            if (rdashFiles == null || rdashFiles.length == 0) {
-                System.out.println("No .rdash files found in the folder");
-                return dashboardNamesList;
-            }
-
-            for (File rdashFile : rdashFiles) {
-                String fileNameWithoutExtension = rdashFile.getName().replaceFirst("[.][^.]+$", "");
-                String jsonContent = extractJsonFromRdash(rdashFile.getPath());
-                if (jsonContent.isEmpty()) {
-                    System.out.println("No JSON content found in the rdash file: " + rdashFile.getName());
-                    continue;
-                }
-
-                String title = extractTitleFromJson(jsonContent);
-                dashboardNamesList.add(new DashboardInfo(fileNameWithoutExtension, title));
-            }
-
-        } catch (IOException e) {
-            System.err.println("Error while reading the rdash files: " + e.getMessage());
-            e.printStackTrace();
-        }
-
-        return dashboardNamesList;
     }
 
     public String extractJsonFromRdash(String filePath) throws IOException {
@@ -145,11 +136,14 @@ public class DomController {
             String vizId = widget.optString("Id", "Unknown Id");
             String vizTitle = widget.optString("Title", "Untitled");    
             JSONObject visualizationSettings = widget.optJSONObject("VisualizationSettings");
-            String vizChartType = "Unknown Chart Type"; 
+            String vizChartType = "Unknown Chart Type"; // Default value
     
             if (visualizationSettings != null) {
-                String type = visualizationSettings.optString("_type");
-    
+                String type = visualizationSettings.optString("_type");    
+
+
+                System.out.println("Single Viz type + "  + type + "----" +  vizChartType);     
+
                 switch (type) {
                     case "IndicatorVisualizationSettingsType":
                         vizChartType = "KpiTime";
@@ -157,6 +151,11 @@ public class DomController {
                     case "SingleRowVisualizationSettingsType":
                         vizChartType = "TextView";
                         break;
+                    case "SingleGaugeVisualizationDataSpecType":    
+                            
+                            vizChartType = "Text";
+                            System.out.println("is --->>>>> + "  + vizChartType);                                       
+                            break;
                     case "IndicatorTargetVisualizationSettingsType":
                         vizChartType = "KpiTarget";
                         break;
@@ -180,12 +179,10 @@ public class DomController {
                         break;                        
                     case "ChoroplethMapVisualizationSettingsType":
                         vizChartType = "Choropleth";
-                    break;     
-                    case "CompositeVisualizationSettingsType":
-                        vizChartType = "Combo";
-                        break; 
+                        break;     
                     default:
                         vizChartType = visualizationSettings.optString("ChartType", "Unknown Chart Type");
+                        System.out.println(type + " : " + vizChartType);
                         break;
                 }
             }
@@ -205,23 +202,5 @@ public class DomController {
         }
         String dashboardImagePath = "/images/";
         return dashboardImagePath + input + ".png";
-    }
-
-    public static class DashboardInfo {
-        private String dashboardFileName;
-        private String dashboardTitle;
-
-        public DashboardInfo(String dashboardFileName, String dashboardTitle) {
-            this.dashboardFileName = dashboardFileName;
-            this.dashboardTitle = dashboardTitle;
-        }
-
-        public String getDashboardFileName() {
-            return dashboardFileName;
-        }
-
-        public String getDashboardTitle() {
-            return dashboardTitle;
-        }
-    }
+    }    
 }
